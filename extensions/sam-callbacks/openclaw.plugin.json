@@ -1,0 +1,10 @@
+{
+  "id": "sam-callbacks",
+  "name": "Sam Callbacks",
+  "description": "Handles quiz and contact inline button callbacks without LLM invocation",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  }
+}
