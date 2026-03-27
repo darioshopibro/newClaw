@@ -1,0 +1,7 @@
+{
+  "id": "sam-callbacks",
+  "name": "Sam Callbacks",
+  "description": "Handles quiz and contact inline button callbacks without LLM invocation",
+  "version": "1.0.0",
+  "extensions": ["./src/index.ts"]
+}

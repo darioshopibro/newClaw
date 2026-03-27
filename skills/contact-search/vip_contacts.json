@@ -1,0 +1,10 @@
+{
+  "vips": [
+    {
+      "keyword": "assistant",
+      "name": "Yulia",
+      "contact_id": null,
+      "notes": "Personal assistant - will be populated with real contact_id"
+    }
+  ]
+}
