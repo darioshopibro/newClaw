@@ -24,6 +24,17 @@ AIRTABLE_API_KEY = os.environ.get("AIRTABLE_API_KEY", "")
 AIRTABLE_BASE_ID = "appGJPPF2t2bhoFZg"  # Padel base
 AIRTABLE_API_URL = f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}"
 
+# Fallback: read from /etc/environment if env var not set
+if not AIRTABLE_API_KEY:
+    try:
+        with open("/etc/environment", "r") as f:
+            for line in f:
+                if line.startswith("AIRTABLE_API_KEY="):
+                    AIRTABLE_API_KEY = line.strip().split("=", 1)[1].strip('"').strip("'")
+                    break
+    except Exception:
+        pass
+
 # City → Table ID mapping
 CITY_TABLES = {
     "dubai": "tblEM74rGjwhsHtrr",

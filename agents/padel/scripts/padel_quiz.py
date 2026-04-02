@@ -35,8 +35,19 @@ from datetime import datetime
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'lib'))
 from logger import padel_log as log
 
-# Config - NO hardcoded secrets
-BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "8297820489:AAEIIZZ5BReyN-HgCTfd-xzvd3hBOU-kxKs")
+# Config
+BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+
+# Fallback: read tokens from /etc/environment if env vars not set
+if not BOT_TOKEN:
+    try:
+        with open("/etc/environment", "r") as f:
+            for line in f:
+                if line.startswith("TELEGRAM_BOT_TOKEN="):
+                    BOT_TOKEN = line.strip().split("=", 1)[1].strip('"').strip("'")
+                    break
+    except Exception:
+        pass
 STATE_DIR = os.environ.get("PADEL_STATE_DIR", "/root/.openclaw/padel_state")
 SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -305,19 +316,13 @@ def start_quiz(args):
     date = getattr(args, 'date', None)
     time_str = getattr(args, 'time', None)
     duration = getattr(args, 'duration', None)
-    court_type = getattr(args, 'court_type', None)
-    players = getattr(args, 'players', None)
 
     log(f"Starting quiz: {task_id}, city={city}, venue={venue_name}, date={date}, time={time_str}")
 
     # Build settings with overrides
     settings = DEFAULT_SETTINGS.copy()
-    if duration and duration in ["1hr", "1.5hr", "2hr"]:
+    if duration and duration in ["1hr", "1.5hr"]:
         settings["duration"] = duration
-    if court_type and court_type in ["indoor", "outdoor", "any"]:
-        settings["court_type"] = court_type
-    if players and players in ["2", "4"]:
-        settings["players"] = players
 
     # Determine starting step based on what's provided
     city_key = None
@@ -582,8 +587,6 @@ def handle_callback(args):
             "availability_methods": venue.get("availability_methods", []),
             "duration": settings.get("duration", "1.5hr"),
             "duration_minutes": duration_minutes,
-            "court_type": settings.get("court_type", "any"),
-            "players": settings.get("players", "4"),
             "conflicts": conflicts,
             "status": "ready_for_booking",
             "created_at": datetime.utcnow().isoformat(),
@@ -639,9 +642,7 @@ def main():
     start_p.add_argument('--venue', help="Pre-detected venue name")
     start_p.add_argument('--date', help="Booking date YYYY-MM-DD")
     start_p.add_argument('--time', help="Booking time HH:MM")
-    start_p.add_argument('--duration', choices=["1hr", "1.5hr", "2hr"])
-    start_p.add_argument('--court_type', choices=["indoor", "outdoor", "any"])
-    start_p.add_argument('--players', choices=["2", "4"])
+    start_p.add_argument('--duration', choices=["1hr", "1.5hr"])
 
     # Handle command
     handle_p = subparsers.add_parser('handle')
