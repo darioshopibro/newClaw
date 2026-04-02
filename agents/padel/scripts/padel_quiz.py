@@ -36,7 +36,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'lib'))
 from logger import padel_log as log
 
 # Config - NO hardcoded secrets
-BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "8297820489:AAEIIZZ5BReyN-HgCTfd-xzvd3hBOU-kxKs")
 STATE_DIR = os.environ.get("PADEL_STATE_DIR", "/root/.openclaw/padel_state")
 SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
 

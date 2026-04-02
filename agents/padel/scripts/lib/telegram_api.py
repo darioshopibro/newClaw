@@ -9,7 +9,7 @@ import requests
 from typing import Optional, Union
 
 # Telegram configuration
-TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '')
+TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '8297820489:AAEIIZZ5BReyN-HgCTfd-xzvd3hBOU-kxKs')
 TELEGRAM_API_BASE = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
 
 
