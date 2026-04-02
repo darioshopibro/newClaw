@@ -50,8 +50,6 @@ STEP_CONFIRM = "confirm"
 # Defaults
 DEFAULT_SETTINGS = {
     "duration": "1.5hr",
-    "court_type": "any",
-    "players": "4",
 }
 
 CITIES = [
@@ -136,12 +134,19 @@ def cb(selected: bool, label: str) -> str:
 
 
 def build_city_keyboard(task_id: str) -> dict:
+    # 3 cities per row for compact layout
     rows = []
+    row = []
     for city in CITIES:
-        rows.append([{
-            "text": f"🌍 {city['name']}",
+        row.append({
+            "text": city['name'],
             "callback_data": f"padel:{task_id}|city|{city['key']}",
-        }])
+        })
+        if len(row) == 3:
+            rows.append(row)
+            row = []
+    if row:
+        rows.append(row)
     rows.append([{"text": "❌ Cancel", "callback_data": f"padel:{task_id}|cancel"}])
     return {"inline_keyboard": rows}
 
@@ -157,12 +162,8 @@ def build_venue_keyboard(task_id: str, venues: list, page: int = 0) -> dict:
     for i, venue in enumerate(page_venues):
         idx = start + i
         name = venue.get("name", "Unknown")
-        indoor = venue.get("indoor_outdoor", "")
-        label = name
-        if indoor:
-            label = f"{name} ({indoor})"
         rows.append([{
-            "text": label,
+            "text": name,
             "callback_data": f"padel:{task_id}|venue|{idx}",
         }])
 
@@ -187,26 +188,12 @@ def build_venue_keyboard(task_id: str, venues: list, page: int = 0) -> dict:
 
 def build_settings_keyboard(task_id: str, settings: dict, has_venue: bool = True) -> dict:
     dur = settings.get("duration", "1.5hr")
-    court = settings.get("court_type", "any")
-    players = settings.get("players", "4")
 
     rows = [
-        # Duration
+        # Duration only
         [
-            {"text": cb(dur == "1hr", "1hr"), "callback_data": f"padel:{task_id}|dur|1hr"},
-            {"text": cb(dur == "1.5hr", "1.5hr"), "callback_data": f"padel:{task_id}|dur|1.5hr"},
-            {"text": cb(dur == "2hr", "2hr"), "callback_data": f"padel:{task_id}|dur|2hr"},
-        ],
-        # Court type
-        [
-            {"text": cb(court == "indoor", "Indoor"), "callback_data": f"padel:{task_id}|court|indoor"},
-            {"text": cb(court == "outdoor", "Outdoor"), "callback_data": f"padel:{task_id}|court|outdoor"},
-            {"text": cb(court == "any", "Any"), "callback_data": f"padel:{task_id}|court|any"},
-        ],
-        # Players
-        [
-            {"text": cb(players == "2", "2 players"), "callback_data": f"padel:{task_id}|players|2"},
-            {"text": cb(players == "4", "4 players"), "callback_data": f"padel:{task_id}|players|4"},
+            {"text": cb(dur == "1hr", "1 hour"), "callback_data": f"padel:{task_id}|dur|1hr"},
+            {"text": cb(dur == "1.5hr", "1.5 hours"), "callback_data": f"padel:{task_id}|dur|1.5hr"},
         ],
     ]
 
@@ -247,11 +234,9 @@ def build_message(state: dict) -> str:
         text += f"📍 <b>Select venue ({len(venues)} found):</b>"
     elif step == STEP_SETTINGS:
         settings = state.get("settings", DEFAULT_SETTINGS)
-        dur_display = {"1hr": "1 hour", "1.5hr": "1.5 hours", "2hr": "2 hours"}
-        text += "⚙️ <b>Booking settings:</b>\n\n"
+        dur_display = {"1hr": "1 hour", "1.5hr": "1.5 hours"}
+        text += "⚙️ <b>Select duration:</b>\n\n"
         text += f"⏱ Duration: {dur_display.get(settings['duration'], settings['duration'])}\n"
-        text += f"🏠 Court: {settings.get('court_type', 'any').title()}\n"
-        text += f"👥 Players: {settings.get('players', '4')}\n"
     elif step == STEP_CONFLICTS:
         conflicts = state.get("conflicts", [])
         if conflicts:
@@ -608,14 +593,12 @@ def handle_callback(args):
         save_state(task_id, state)
 
         # Show confirmation
-        dur_display = {"1hr": "1 hour", "1.5hr": "1.5 hours", "2hr": "2 hours"}
+        dur_display = {"1hr": "1 hour", "1.5hr": "1.5 hours"}
         text = "🎾 <b>Booking Ready!</b>\n\n"
         text += f"📆 {date} at {time_str}\n"
         text += f"🌍 {state.get('city_name', '')}\n"
         text += f"🏟 {venue.get('name', 'TBD')}\n"
         text += f"⏱ {dur_display.get(settings['duration'], settings['duration'])}\n"
-        text += f"🏠 Court: {settings.get('court_type', 'any').title()}\n"
-        text += f"👥 Players: {settings.get('players', '4')}\n"
 
         if conflicts:
             text += f"\n⚠️ <b>{len(conflicts)} conflict(s) found:</b>\n"
