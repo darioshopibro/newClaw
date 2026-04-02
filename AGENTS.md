@@ -295,6 +295,42 @@ python3 /root/.openclaw/workspace/skills/contact-search/scripts/search_google.py
 
 ---
 
+### Agent: PadelBookingAgent (Sub-Agent)
+
+**Name:** PadelBookingAgent
+**Role:** Padel court booking via interactive quiz
+**Type:** Sub-agent (spawned by main agent)
+**Mode:** run
+
+**Skills:**
+- `/root/.openclaw/workspace/agents/padel/AGENTS.md`
+
+**Trigger:** When user mentions "padel", "court booking", "book padel", "play padel"
+
+**How it works:**
+1. Parse user message for: city, venue, date, time, duration, court type, players
+2. Run `padel_quiz.py start` with detected values
+3. Say `ANNOUNCE_SKIP`
+4. Quiz buttons handled automatically by sam-callbacks plugin (padel: namespace)
+
+---
+
+## PADEL: "book padel [CITY] [DATE] [TIME]"
+
+**STEP 1 - Run quiz:**
+```bash
+python3 /root/.openclaw/workspace/agents/padel/scripts/padel_quiz.py start \
+  --task_id "padel_$(date +%s)" \
+  --chat_id "CHAT_ID" \
+  --city "CITY" \
+  --date "YYYY-MM-DD" \
+  --time "HH:MM"
+```
+
+**STEP 2:** Say `ANNOUNCE_SKIP`
+
+---
+
 ## Framework Reference
 
 **Agents Created Following:**
@@ -304,4 +340,4 @@ python3 /root/.openclaw/workspace/skills/contact-search/scripts/search_google.py
 
 ---
 
-**Last Updated:** 2026-03-20
+**Last Updated:** 2026-04-02

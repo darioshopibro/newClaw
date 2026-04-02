@@ -3,6 +3,7 @@ import { join } from "node:path";
 
 const QUIZ_STATE_DIR = "/root/.openclaw/quiz_state";
 const CONTACT_STATE_DIR = "/root/.openclaw/contact_state";
+const PADEL_STATE_DIR = "/root/.openclaw/padel_state";
 
 function ensureDir(dir: string) {
   if (!existsSync(dir)) {
@@ -47,5 +48,23 @@ export function saveContactState(taskId: string, state: Record<string, any>) {
 
 export function deleteContactState(taskId: string) {
   const path = join(CONTACT_STATE_DIR, `${safeName(taskId)}.json`);
+  if (existsSync(path)) unlinkSync(path);
+}
+
+export function loadPadelState(taskId: string): Record<string, any> | null {
+  ensureDir(PADEL_STATE_DIR);
+  const path = join(PADEL_STATE_DIR, `${safeName(taskId)}.json`);
+  if (!existsSync(path)) return null;
+  return JSON.parse(readFileSync(path, "utf-8"));
+}
+
+export function savePadelState(taskId: string, state: Record<string, any>) {
+  ensureDir(PADEL_STATE_DIR);
+  const path = join(PADEL_STATE_DIR, `${safeName(taskId)}.json`);
+  writeFileSync(path, JSON.stringify(state, null, 2));
+}
+
+export function deletePadelState(taskId: string) {
+  const path = join(PADEL_STATE_DIR, `${safeName(taskId)}.json`);
   if (existsSync(path)) unlinkSync(path);
 }
