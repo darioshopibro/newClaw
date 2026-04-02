@@ -71,7 +71,7 @@ CITIES = [
     {"key": "belgrade", "name": "Belgrade"},
 ]
 
-PAGE_SIZE = 5
+PAGE_SIZE = 8
 
 
 # ── State management ─────────────────────────────────────────
@@ -169,28 +169,35 @@ def build_venue_keyboard(task_id: str, venues: list, page: int = 0) -> dict:
     end = min(start + PAGE_SIZE, total)
     page_venues = venues[start:end]
 
+    # Venues in rows of 2
     rows = []
+    row = []
     for i, venue in enumerate(page_venues):
         idx = start + i
         name = venue.get("name", "Unknown")
-        rows.append([{
+        row.append({
             "text": name,
             "callback_data": f"padel:{task_id}|venue|{idx}",
-        }])
+        })
+        if len(row) == 2:
+            rows.append(row)
+            row = []
+    if row:
+        rows.append(row)
 
-    # Pagination
+    # Pagination only if more than 1 page
     if total_pages > 1:
         nav_row = []
         if page > 0:
             nav_row.append({"text": "⬅️ Prev", "callback_data": f"padel:{task_id}|page|{page - 1}"})
-        nav_row.append({"text": f"📄 {page + 1}/{total_pages}", "callback_data": "noop"})
+        nav_row.append({"text": f"{page + 1}/{total_pages}", "callback_data": "noop"})
         if page < total_pages - 1:
             nav_row.append({"text": "Next ➡️", "callback_data": f"padel:{task_id}|page|{page + 1}"})
         rows.append(nav_row)
 
     # Back + Cancel
     rows.append([
-        {"text": "⬅️ Back to cities", "callback_data": f"padel:{task_id}|back_to_city"},
+        {"text": "⬅️ Back", "callback_data": f"padel:{task_id}|back_to_city"},
         {"text": "❌ Cancel", "callback_data": f"padel:{task_id}|cancel"},
     ])
 
