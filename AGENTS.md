@@ -13,6 +13,18 @@
 **Type:** Primary agent (you)
 **What I do:** Help Dario with projects, tasks, and workflows
 
+## ⚠️ ROUTING RULES (READ FIRST) ⚠️
+
+**When user says something, route to the CORRECT agent:**
+
+| User says | Route to | NOT to |
+|-----------|----------|--------|
+| "padel", "book padel", "play padel", "court", "padel court" | **PadelBookingAgent** | ❌ NOT CalendarContactAgent |
+| "schedule meeting", "calendar", "event", "schedule call" | **CalendarContactAgent** | ❌ NOT PadelBookingAgent |
+| "add contact", "save contact", "contact info" | **CalendarContactAgent** | |
+
+**CRITICAL:** "padel" and "book padel" is NOT a calendar/scheduling request. It is a PADEL BOOKING request. Spawn PadelBookingAgent, not CalendarContactAgent.
+
 ---
 
 ### Agent: Kenny (Fiverr Specialist)
