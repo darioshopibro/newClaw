@@ -18,6 +18,8 @@ import os
 import sys
 import json
 import time
+import signal
+import atexit
 import argparse
 import requests
 import subprocess
@@ -30,6 +32,7 @@ from logger import padel_log as log
 BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 STATE_DIR = os.environ.get("PADEL_STATE_DIR", "/root/.openclaw/padel_state")
 SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
+PID_DIR = "/root/.openclaw/padel_pids"
 
 # Fallback: read from /etc/environment
 if not BOT_TOKEN:
@@ -46,6 +49,66 @@ if not BOT_TOKEN:
 POLL_INTERVAL = 5  # seconds between Retell status checks
 MAX_CALL_WAIT = 360  # 6 minutes max per venue call
 MAX_TOTAL_TIME = 1800  # 30 minutes max for entire loop
+
+
+# ── PID management ───────────────────────────────────────────
+
+def get_pid_path(task_id: str) -> str:
+    os.makedirs(PID_DIR, exist_ok=True)
+    return os.path.join(PID_DIR, f"{task_id}.pid")
+
+
+def kill_existing(task_id: str):
+    """Kill any existing booking_loop for this task."""
+    pid_path = get_pid_path(task_id)
+    if os.path.exists(pid_path):
+        try:
+            with open(pid_path, 'r') as f:
+                old_pid = int(f.read().strip())
+            os.kill(old_pid, signal.SIGTERM)
+            log(f"Killed old process {old_pid}")
+            time.sleep(0.5)
+        except (ProcessLookupError, ValueError):
+            pass
+        try:
+            os.remove(pid_path)
+        except Exception:
+            pass
+
+
+def write_pid(task_id: str):
+    """Write current PID to file."""
+    pid_path = get_pid_path(task_id)
+    with open(pid_path, 'w') as f:
+        f.write(str(os.getpid()))
+
+
+def cleanup_pid(task_id: str):
+    """Remove PID file."""
+    try:
+        pid_path = get_pid_path(task_id)
+        if os.path.exists(pid_path):
+            os.remove(pid_path)
+    except Exception:
+        pass
+
+
+def cleanup_all_stale_pids():
+    """Remove PID files for processes that no longer exist."""
+    try:
+        os.makedirs(PID_DIR, exist_ok=True)
+        for f in os.listdir(PID_DIR):
+            if f.endswith(".pid"):
+                path = os.path.join(PID_DIR, f)
+                try:
+                    with open(path, 'r') as fh:
+                        pid = int(fh.read().strip())
+                    os.kill(pid, 0)  # check if alive
+                except (ProcessLookupError, ValueError):
+                    os.remove(path)
+                    log(f"Cleaned stale PID file: {f}")
+    except Exception:
+        pass
 
 # Status rendering (matches n8n StatusRenderer exactly)
 
@@ -312,9 +375,24 @@ def build_progress_message(booking_data: dict, all_venues: list, clubs: dict,
 
 def run_booking_loop(task_id: str):
     """Main booking loop - calls venues and tracks progress."""
+    # Kill any existing loop for this task, write our PID
+    kill_existing(task_id)
+    cleanup_all_stale_pids()
+    write_pid(task_id)
+    atexit.register(cleanup_pid, task_id)
+
+    # Handle SIGTERM gracefully
+    def handle_signal(signum, frame):
+        log(f"Received signal {signum}, cleaning up")
+        cleanup_pid(task_id)
+        sys.exit(0)
+    signal.signal(signal.SIGTERM, handle_signal)
+    signal.signal(signal.SIGINT, handle_signal)
+
     state = load_state(task_id)
     if not state:
         log(f"No state found for {task_id}")
+        cleanup_pid(task_id)
         return
 
     # Build booking_data from quiz state (plugin calls us directly, padel_quiz.py proceed may not have run)
@@ -408,6 +486,13 @@ def run_booking_loop(task_id: str):
         venue_name = venue.get("name", "Unknown")
         phone = venue.get("phone", "")
 
+        # Check if cancelled
+        fresh_state = load_state(task_id)
+        if fresh_state.get("loop_status") == "cancelled":
+            log("Loop cancelled by user")
+            cleanup_pid(task_id)
+            return
+
         if time.time() - loop_start > MAX_TOTAL_TIME:
             log("Max total time reached, stopping loop")
             break
@@ -450,6 +535,13 @@ def run_booking_loop(task_id: str):
 
         while time.time() - call_start < MAX_CALL_WAIT:
             time.sleep(POLL_INTERVAL)
+
+            # Check cancel during poll wait
+            fresh = load_state(task_id)
+            if fresh.get("loop_status") == "cancelled":
+                log("Cancelled during poll wait")
+                cleanup_pid(task_id)
+                return
 
             status_result = check_vapi_status(call_id)
             call_status = status_result.get("status", "unknown")
@@ -544,6 +636,7 @@ def run_booking_loop(task_id: str):
 
     edit_message(chat_id, progress_msg_id, text, buttons)
 
+    cleanup_pid(task_id)
     log(f"Booking loop completed. Confirmed: {confirmed_venue or 'None'}, Alternatives: {len(venues_with_times)}")
 
 

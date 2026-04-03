@@ -277,13 +277,17 @@ export async function handlePadelCallback(
   }
 
   if (action === "cancel_booking") {
-    // Mark state as cancelled so booking_loop.py stops
+    // Mark cancelled in state + kill booking_loop process
     try {
-      const stateFile = `${STATE_DIR}/${taskId}.json`;
-      const raw = execSync(`cat ${stateFile}`, { encoding: "utf-8" });
-      const st = JSON.parse(raw);
-      st.loop_status = "cancelled";
-      execSync(`echo ${JSON.stringify(JSON.stringify(st))} > ${stateFile}`);
+      const { writeFileSync } = await import("node:fs");
+      const st = readState(taskId);
+      if (st) {
+        st.loop_status = "cancelled";
+        writeFileSync(`${STATE_DIR}/${taskId}.json`, JSON.stringify(st, null, 2));
+      }
+    } catch {}
+    try {
+      execSync(`pkill -f "booking_loop.py --task_id ${taskId}" 2>/dev/null || true`);
     } catch {}
     await respond.editMessage({ text: "\u274c Booking Cancelled", buttons: [] });
     return { handled: true };
