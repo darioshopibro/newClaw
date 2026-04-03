@@ -144,7 +144,7 @@ def send_message(chat_id: str, text: str, keyboard: dict = None) -> int:
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     payload = {"chat_id": chat_id, "text": text, "parse_mode": "HTML"}
     if keyboard:
-        payload["reply_markup"] = json.dumps(keyboard) if isinstance(keyboard, dict) else keyboard
+        payload["reply_markup"] = keyboard
     try:
         resp = requests.post(url, json=payload, timeout=10)
         data = resp.json()
@@ -170,7 +170,7 @@ def edit_message(chat_id: str, message_id: int, text: str, keyboard: dict = None
         "parse_mode": "HTML",
     }
     if keyboard:
-        payload["reply_markup"] = json.dumps(keyboard) if isinstance(keyboard, dict) else keyboard
+        payload["reply_markup"] = keyboard
     try:
         resp = requests.post(url, json=payload, timeout=10)
         if resp.status_code != 200:
