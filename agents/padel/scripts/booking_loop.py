@@ -550,7 +550,7 @@ def run_booking_loop(task_id: str):
             if not status_result.get("success"):
                 continue
 
-            if call_status in ("ended", "error"):
+            if call_status in ("ended", "error", "not_connected"):
                 # Call ended - process result
                 was_picked_up = status_result.get("was_picked_up", False)
                 was_successful = status_result.get("was_successful", False)
@@ -563,9 +563,9 @@ def run_booking_loop(task_id: str):
                 clubs[venue_name]["cost_cents"] = status_result.get("cost_cents", 0)
                 clubs[venue_name]["duration_seconds"] = status_result.get("duration_seconds", 0)
 
-                if not was_picked_up:
+                if call_status == "not_connected" or not was_picked_up:
                     clubs[venue_name]["status"] = "hung_up"
-                    log(f"{venue_name}: no answer ({ended_reason})")
+                    log(f"{venue_name}: no answer ({ended_reason or call_status})")
                 elif was_successful:
                     clubs[venue_name]["status"] = "confirmed"
                     clubs[venue_name]["times_available"] = times_available

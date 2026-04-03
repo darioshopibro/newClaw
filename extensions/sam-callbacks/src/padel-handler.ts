@@ -56,11 +56,16 @@ export async function handlePadelCallback(
       execSync(`pkill -f "booking_loop.py --task_id ${taskId}" 2>/dev/null || true`, { encoding: "utf-8" });
     } catch {}
 
-    // Launch booking loop in background with nohup
+    // Launch booking loop in background
     try {
+      const { openSync } = await import("node:fs");
       const logFile = "/var/log/openclaw_padel.log";
-      const cmd = `nohup python3 -u ${SCRIPTS_DIR}/booking_loop.py --task_id ${taskId} >> ${logFile} 2>&1 &`;
-      execSync(cmd, { encoding: "utf-8" });
+      const out = openSync(logFile, "a");
+      const child = spawn("python3", ["-u", `${SCRIPTS_DIR}/booking_loop.py`, "--task_id", taskId], {
+        detached: true,
+        stdio: ["ignore", out, out],
+      });
+      child.unref();
 
       return { handled: true };
     } catch (err: any) {
