@@ -328,7 +328,19 @@ def build_progress_buttons(task_id: str, clubs: dict) -> dict:
             }])
             added.add(name)
 
-    # 3. Cancel button (always present)
+    # 3. Try again button (if no venues with times and some untried remain)
+    tried = ["declined", "rejected", "hung_up", "no_answer", "no_availability", "timeout", "error", "confirmed", "booked", "has_times"]
+    untried = [n for n, c in clubs.items() if c.get("status") not in tried]
+    all_done = len(untried) == 0
+    no_times = len(venues_with_times) == 0
+
+    if all_done and no_times:
+        rows.append([{
+            "text": "🔄 Try Again (untried venues)",
+            "callback_data": f"padel:{task_id}|retry",
+        }])
+
+    # 4. Cancel button (always present)
     rows.append([{
         "text": "❌ Cancel Booking",
         "callback_data": f"padel:{task_id}|cancel_booking",
@@ -440,6 +452,28 @@ def run_booking_loop(task_id: str):
     log(f"Starting booking loop: {len(venues)} venues for {booking_data.get('city', '')}")
     log(f"BOT_TOKEN set: {bool(BOT_TOKEN)}, chat_id: {chat_id}")
 
+    # Check calendar conflicts before starting calls
+    date = booking_data.get("date", "")
+    time_str = booking_data.get("time", "")
+    duration_minutes = booking_data.get("duration_minutes", 90)
+
+    if date and time_str:
+        try:
+            conflict_result = subprocess.run(
+                ["python3", os.path.join(SCRIPTS_DIR, "check_conflicts.py"),
+                 "--date", date, "--time", time_str, "--duration", str(duration_minutes)],
+                capture_output=True, text=True, timeout=15
+            )
+            if conflict_result.returncode == 0:
+                conflict_data = json.loads(conflict_result.stdout)
+                conflicts = conflict_data.get("conflicts", [])
+                if conflicts:
+                    state["conflicts"] = conflicts
+                    save_state(task_id, state)
+                    log(f"Found {len(conflicts)} calendar conflict(s)")
+        except Exception as e:
+            log(f"Conflict check failed: {e}")
+
     # Initialize clubs tracking dict
     clubs = {}
     for venue in venues:
@@ -469,6 +503,15 @@ def run_booking_loop(task_id: str):
 
     # Send initial progress message with Cancel button
     text = f"📞 <b>Booking Progress</b>\n\n"
+
+    # Show conflicts warning if any
+    conflicts = state.get("conflicts", [])
+    if conflicts:
+        text += f"⚠️ <b>{len(conflicts)} calendar conflict(s):</b>\n"
+        for c in conflicts[:3]:
+            text += f"  • {c.get('title', 'Event')} at {c.get('time', '?')}\n"
+        text += "\n"
+
     for v in all_venues:
         text += f"📞 <b>{v['name']}</b> — queued\n"
     text += "\n⏳ Starting..."

@@ -135,7 +135,7 @@ export async function handlePadelCallback(
 
     // Recording link if available
     if (venueInfo.recording_url) {
-      rows.push([{ text: "\ud83c\udfa7 Listen to call", callback_data: `padel:${taskId}|noop` }]);
+      rows.push([{ text: "\ud83c\udfa7 Listen to call", url: info.recording_url }]);
     }
 
     rows.push([
@@ -381,7 +381,7 @@ export async function handlePadelCallback(
 
     // Recording link
     if (info.recording_url) {
-      rows.push([{ text: "\ud83c\udfa7 Listen to call", callback_data: `padel:${taskId}|noop` }]);
+      rows.push([{ text: "\ud83c\udfa7 Listen to call", url: info.recording_url }]);
     }
 
     // Full transcript button (if transcript is long)
@@ -442,11 +442,93 @@ export async function handlePadelCallback(
   }
 
   if (action === "retry") {
-    // TODO: restart quiz or loop
-    await respond.editMessage({
-      text: "\ud83d\udd04 Please send a new booking request.",
-      buttons: [],
+    // Restart booking loop - exclude failed venues, try remaining
+    const clubs: Record<string, any> = state.clubs || {};
+    const allVenues: any[] = state.all_venues || [];
+    const bd = state.booking_data || {};
+
+    // Get venues that haven't been tried or were skipped
+    const triedStatuses = ["declined", "rejected", "hung_up", "no_answer", "no_availability", "timeout", "confirmed", "booked", "has_times", "error"];
+    const remainingVenues = (state.venues || []).filter((v: any) => {
+      const club = clubs[v.name];
+      return !club || !triedStatuses.includes(club.status);
     });
+
+    if (remainingVenues.length === 0) {
+      await respond.editMessage({
+        text: "\u274c All venues have been tried. Send a new booking request to try again.",
+        buttons: [],
+      });
+      return { handled: true };
+    }
+
+    // Update state with remaining venues and reset loop
+    state.venues = remainingVenues;
+    state.loop_status = "pending";
+    try {
+      const { writeFileSync } = require("node:fs");
+      writeFileSync(`${STATE_DIR}/${taskId}.json`, JSON.stringify(state, null, 2));
+    } catch {}
+
+    // Kill old loop and start new one
+    try { execSync(`pkill -f "booking_loop.py --task_id ${taskId}" 2>/dev/null || true`); } catch {}
+
+    try {
+      const { openSync } = require("node:fs");
+      const logFile = "/var/log/openclaw_padel.log";
+      const out = openSync(logFile, "a");
+      const child = spawn("python3", ["-u", `${SCRIPTS_DIR}/booking_loop.py`, "--task_id", taskId], {
+        detached: true,
+        stdio: ["ignore", out, out],
+      });
+      child.unref();
+    } catch {}
+
+    return { handled: true };
+  }
+
+  if (action === "try_next") {
+    // Try a specific different venue - restart loop with that venue first
+    const nextVenueName = value;
+    const clubs: Record<string, any> = state.clubs || {};
+
+    // Put requested venue first, then untried venues
+    const triedStatuses = ["declined", "rejected", "hung_up", "no_answer", "no_availability", "timeout", "confirmed", "booked", "error"];
+    const allVenuesList = state.venues || [];
+    const targetVenue = allVenuesList.find((v: any) => v.name === nextVenueName);
+    const otherUntried = allVenuesList.filter((v: any) => {
+      if (v.name === nextVenueName) return false;
+      const club = clubs[v.name];
+      return !club || !triedStatuses.includes(club.status);
+    });
+
+    state.venues = targetVenue ? [targetVenue, ...otherUntried] : otherUntried;
+    state.loop_status = "pending";
+
+    // Reset clubs status for retried venues
+    for (const v of state.venues) {
+      if (clubs[v.name]) clubs[v.name].status = "pending";
+    }
+    state.clubs = clubs;
+
+    try {
+      const { writeFileSync } = require("node:fs");
+      writeFileSync(`${STATE_DIR}/${taskId}.json`, JSON.stringify(state, null, 2));
+    } catch {}
+
+    try { execSync(`pkill -f "booking_loop.py --task_id ${taskId}" 2>/dev/null || true`); } catch {}
+
+    try {
+      const { openSync } = require("node:fs");
+      const logFile = "/var/log/openclaw_padel.log";
+      const out = openSync(logFile, "a");
+      const child = spawn("python3", ["-u", `${SCRIPTS_DIR}/booking_loop.py`, "--task_id", taskId], {
+        detached: true,
+        stdio: ["ignore", out, out],
+      });
+      child.unref();
+    } catch {}
+
     return { handled: true };
   }
 
