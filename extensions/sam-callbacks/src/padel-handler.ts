@@ -194,31 +194,97 @@ export async function handlePadelCallback(
   }
 
   if (action === "back_to_alternatives") {
-    // Rebuild alternatives view from state
+    // Rebuild FULL progress view with ALL venue statuses and buttons
+    // Matches StatusRenderer logic exactly
     const clubs: Record<string, any> = state.clubs || {};
     const bd = state.booking_data || {};
+    const allVenues: any[] = state.all_venues || [];
+
+    // Rebuild status list (same as Python render_status_list)
+    const statusIcons: Record<string, string> = {
+      confirmed: "\u2705", booked: "\u2705", has_times: "\ud83d\udd50",
+      calling: "\ud83d\udcde", pending: "\ud83d\udcde", declined: "\u274c",
+      rejected: "\u274c", no_availability: "\u274c", hung_up: "\ud83d\udcf5",
+      no_answer: "\ud83d\udcf5", timeout: "\ud83d\udca4", skipped: "\u23ed\ufe0f",
+      error: "\u26a0\ufe0f", pending_wa: "\ud83d\udcf1",
+    };
+    const statusLabels: Record<string, string> = {
+      confirmed: "BOOKED!", booked: "BOOKED!", calling: "calling...",
+      pending: "queued", declined: "no availability", rejected: "no availability",
+      no_availability: "no availability", hung_up: "no answer", no_answer: "no answer",
+      timeout: "no WA response", skipped: "skipped", error: "error",
+    };
 
     let text = `\ud83d\udcde <b>Booking Progress</b>\n\n`;
     text += `\ud83d\udcc6 ${bd.date || ""} at ${bd.time || ""}\n`;
     text += `\ud83c\udf0d ${bd.city || ""}\n\n`;
 
-    const venuesWithTimes: string[] = [];
-    for (const [name, info] of Object.entries(clubs)) {
-      const times = (info as any).times_available || [];
-      if (times.length > 0) venuesWithTimes.push(name);
+    for (const v of allVenues) {
+      const club = clubs[v.name];
+      if (!club) continue;
+      const status = club.status || "pending";
+      const icon = statusIcons[status] || "\u23f3";
+      let label = statusLabels[status] || status;
+      if (status === "has_times") {
+        const t = club.times_available?.length || 0;
+        label = `${t} slots available \ud83d\udcde`;
+      }
+      text += `${icon} <b>${v.name}</b> \u2014 ${label}\n`;
     }
 
-    text += `\ud83c\udfbe <b>${venuesWithTimes.length} venue(s) have available times!</b>\nPick a venue:`;
+    // Cost summary
+    let totalCost = 0, totalDur = 0, totalCalls = 0;
+    for (const c of Object.values(clubs) as any[]) {
+      totalCost += c.cost_cents || 0;
+      totalDur += c.duration_seconds || 0;
+      if (!["pending", "skipped"].includes(c.status)) totalCalls++;
+    }
+    if (totalCalls > 0) {
+      const mins = Math.floor(totalDur / 60);
+      const secs = totalDur % 60;
+      text += `\n\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n`;
+      text += `\ud83d\udcb0 $${(totalCost / 100).toFixed(2)} | \u23f1 ${mins}m ${secs}s (${totalCalls} calls)`;
+    }
 
+    // Venues with times summary
+    const venuesWithTimes = Object.entries(clubs).filter(
+      ([, c]: any) => c.times_available?.length > 0
+    );
+    if (venuesWithTimes.length > 0) {
+      text += `\n\n\ud83c\udfbe <b>${venuesWithTimes.length} venue(s) offered alternative times!</b>\n\ud83d\udccb Pick a venue to see available slots:`;
+    }
+
+    // Build buttons (same as Python build_progress_buttons)
     const rows: Buttons = [];
-    for (const name of venuesWithTimes) {
-      const info = clubs[name] as any;
-      rows.push([{
-        text: `\ud83c\udfbe ${name} (${info.times_available.length} slots)`,
-        callback_data: `padel:${taskId}|pick_venue|${name}`,
-      }]);
+    const added = new Set<string>();
+
+    // 1. Venues with times
+    for (const [name, club] of Object.entries(clubs) as any) {
+      if (club.status === "has_times" && club.times_available?.length) {
+        rows.push([{
+          text: `\ud83c\udfbe ${name} (${club.times_available.length} slots) \ud83d\udcde`,
+          callback_data: `padel:${taskId}|pick_venue|${name}`,
+        }]);
+        added.add(name);
+      }
     }
-    rows.push([{ text: "\u274c Cancel", callback_data: `padel:${taskId}|cancel_booking` }]);
+
+    // 2. Failed venues with call data
+    const viewable = ["declined", "rejected", "hung_up", "timeout", "no_availability", "no_answer"];
+    for (const [name, club] of Object.entries(clubs) as any) {
+      if (added.has(name)) continue;
+      if (!viewable.includes(club.status)) continue;
+      if (club.recording_url || club.transcript_lines?.length) {
+        rows.push([{
+          text: `\ud83d\udcde ${name} \u2014 view call`,
+          callback_data: `padel:${taskId}|view_summary|${name}`,
+        }]);
+        added.add(name);
+      }
+    }
+
+    // 3. Cancel
+    rows.push([{ text: "\u274c Cancel Booking", callback_data: `padel:${taskId}|cancel_booking` }]);
 
     await respond.editMessage({ text, buttons: rows });
     return { handled: true };
