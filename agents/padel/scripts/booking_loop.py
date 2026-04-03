@@ -371,6 +371,20 @@ def build_progress_message(booking_data: dict, all_venues: list, clubs: dict,
     return text
 
 
+def update_progress(chat_id: str, msg_id: int, task_id: str,
+                    booking_data: dict, all_venues: list, clubs: dict,
+                    current_venue: str = None, current_index: int = 0,
+                    total_venues: int = 0, extra_text: str = ""):
+    """Single function that updates Telegram progress message.
+    ALWAYS includes both text AND reply_markup. Never call edit_message directly."""
+    text = build_progress_message(booking_data, all_venues, clubs,
+                                   current_venue, current_index, total_venues)
+    if extra_text:
+        text += f"\n\n{extra_text}"
+    buttons = build_progress_buttons(task_id, clubs)
+    edit_message(chat_id, msg_id, text, buttons)
+
+
 # ── Main booking loop ────────────────────────────────────────
 
 def run_booking_loop(task_id: str):
@@ -506,24 +520,20 @@ def run_booking_loop(task_id: str):
             clubs[venue_name]["status"] = "skipped"
             continue
 
-        # Update status: calling + update Telegram with reply_markup
+        # Update status: calling
         clubs[venue_name]["status"] = "calling"
-        text = build_progress_message(booking_data, all_venues, clubs,
-                                       current_venue=venue_name,
-                                       current_index=i + 1,
-                                       total_venues=total_venues)
-        buttons = build_progress_buttons(task_id, clubs)
-        edit_message(chat_id, progress_msg_id, text, buttons)
+        update_progress(chat_id, progress_msg_id, task_id, booking_data,
+                        all_venues, clubs, current_venue=venue_name,
+                        current_index=i + 1, total_venues=total_venues)
 
-        # Start VAPI call
+        # Start Retell call
         call_result = start_vapi_call(venue, booking_data)
 
         if not call_result.get("success"):
             log(f"Failed to start call to {venue_name}: {call_result.get('error')}")
             clubs[venue_name]["status"] = "error"
-            text = build_progress_message(booking_data, all_venues, clubs)
-            buttons = build_progress_buttons(task_id, clubs)
-            edit_message(chat_id, progress_msg_id, text, buttons)
+            update_progress(chat_id, progress_msg_id, task_id, booking_data,
+                            all_venues, clubs)
             continue
 
         call_id = call_result.get("call_id", "")
@@ -586,10 +596,9 @@ def run_booking_loop(task_id: str):
             clubs[venue_name]["status"] = "timeout"
             log(f"{venue_name}: call timed out after {MAX_CALL_WAIT}s")
 
-        # Update progress message after each venue (with reply_markup)
-        text = build_progress_message(booking_data, all_venues, clubs)
-        buttons = build_progress_buttons(task_id, clubs)
-        edit_message(chat_id, progress_msg_id, text, buttons)
+        # Update progress message after each venue
+        update_progress(chat_id, progress_msg_id, task_id, booking_data,
+                        all_venues, clubs)
 
         # Save state after each venue
         state["clubs"] = clubs
@@ -611,28 +620,29 @@ def run_booking_loop(task_id: str):
         None
     )
 
-    text = build_progress_message(booking_data, all_venues, clubs)
-    buttons = build_progress_buttons(task_id, clubs)
-
+    extra = ""
     if confirmed_venue:
-        text += f"\n\n✅ <b>Booked at {confirmed_venue}!</b>"
+        extra = f"✅ <b>Booked at {confirmed_venue}!</b>"
         info = clubs[confirmed_venue]
         if info.get("times_available"):
-            text += f"\n🕐 {info['times_available'][0]}"
+            extra += f"\n🕐 {info['times_available'][0]}"
+    elif venues_with_times:
+        extra = f"🎾 <b>{len(venues_with_times)} venue(s) offered alternative times!</b>\n📋 Pick a venue to see available slots:"
+    else:
+        extra = "❌ <b>All venues contacted — no availability.</b>\nTry a different date or time."
 
-        # Add calendar event button
+    # Build final text + buttons
+    text = build_progress_message(booking_data, all_venues, clubs)
+    if extra:
+        text += f"\n\n{extra}"
+    buttons = build_progress_buttons(task_id, clubs)
+
+    # Add calendar event button for confirmed booking
+    if confirmed_venue:
         buttons["inline_keyboard"].insert(0, [{
             "text": "📅 Create Calendar Event",
             "callback_data": f"padel:{task_id}|create_event|{confirmed_venue}",
         }])
-
-    elif venues_with_times:
-        count = len(venues_with_times)
-        text += f"\n\n🎾 <b>{count} venue(s) offered alternative times!</b>\n"
-        text += "📋 Pick a venue to see available slots:"
-
-    else:
-        text += "\n\n❌ <b>All venues contacted — no availability.</b>\nTry a different date or time."
 
     edit_message(chat_id, progress_msg_id, text, buttons)
 
