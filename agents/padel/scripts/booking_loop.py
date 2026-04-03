@@ -444,7 +444,7 @@ def run_booking_loop(task_id: str):
 
             call_status = status_result.get("status", "")
 
-            if call_status == "ended":
+            if call_status in ("ended", "error"):
                 # Call ended - process result
                 was_picked_up = status_result.get("was_picked_up", False)
                 was_successful = status_result.get("was_successful", False)
