@@ -96,6 +96,10 @@ def start_call(
             "court_type": court_type,
             "timezone": timezone,
             "current_datetime": current_datetime,
+            # Both formats - askFelix uses chat_id/user_id/task_id
+            "chat_id": str(chat_id),
+            "user_id": str(user_id),
+            "task_id": str(task_id),
             "telegram_chat_id": str(chat_id),
             "telegram_task_id": str(task_id),
             "telegram_user_id": str(user_id),
