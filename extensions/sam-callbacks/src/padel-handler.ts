@@ -330,20 +330,77 @@ export async function handlePadelCallback(
     const clubs: Record<string, any> = state.clubs || {};
     const info = clubs[venueName] || {};
     const lines: string[] = info.transcript_lines || [];
+    const bd = state.booking_data || {};
 
-    let text = `\ud83d\udcdd <b>Call Summary — ${venueName}</b>\n\n`;
-    if (info.summary) text += `${info.summary}\n\n`;
+    // Header
+    let text = `\ud83c\udfaf <b>${venueName}</b> \u2014 ${bd.date || ""}\n`;
+    text += `\ud83d\udccd ${bd.city || ""}\n`;
+    text += `\u23f1\ufe0f ${bd.duration || "1.5hr"}\n\n`;
+
+    // Summary
+    if (info.summary) {
+      text += `\ud83d\udcdd <b>Call Summary:</b>\n${info.summary}\n\n`;
+    }
+
+    // Call stats
+    if (info.duration_seconds) {
+      const cost = ((info.cost_cents || 0) / 100).toFixed(2);
+      text += `\u23f1 ${info.duration_seconds}s | \ud83d\udcb0 $${cost}\n\n`;
+    }
+
+    // Transcript
     if (lines.length) {
-      text += `<b>Transcript:</b>\n`;
-      for (const line of lines.slice(0, 20)) {
+      text += `\ud83d\udcac <b>Conversation:</b>\n`;
+      for (const line of lines.slice(0, 30)) {
         text += `${line}\n`;
       }
     }
 
-    await respond.editMessage({
-      text,
-      buttons: [[{ text: "\u2b05\ufe0f Back", callback_data: `padel:${taskId}|back_to_alternatives` }]],
-    });
+    // Buttons - matching n8n
+    const rows: Buttons = [];
+
+    // Recording link
+    if (info.recording_url) {
+      rows.push([{ text: "\ud83c\udfa7 Listen to call", callback_data: `padel:${taskId}|noop` }]);
+    }
+
+    // Full transcript button (if transcript is long)
+    if (lines.length > 10) {
+      rows.push([{ text: "\ud83d\udcdd Full Transcript", callback_data: `padel:${taskId}|full_transcript|${venueName}` }]);
+    }
+
+    // Back + Cancel
+    rows.push([
+      { text: "\u2b05\ufe0f Back", callback_data: `padel:${taskId}|back_to_alternatives` },
+      { text: "\u274c Cancel", callback_data: `padel:${taskId}|cancel_booking` },
+    ]);
+
+    await respond.editMessage({ text, buttons: rows });
+    return { handled: true };
+  }
+
+  if (action === "full_transcript") {
+    const venueName = value;
+    const clubs: Record<string, any> = state.clubs || {};
+    const info = clubs[venueName] || {};
+    const lines: string[] = info.transcript_lines || [];
+
+    let text = `\ud83d\udcdd <b>Full Transcript \u2014 ${venueName}</b>\n\n`;
+    for (const line of lines) {
+      text += `${line}\n\n`;
+    }
+
+    const rows: Buttons = [
+      [
+        { text: "\u2b05\ufe0f Back", callback_data: `padel:${taskId}|view_summary|${venueName}` },
+        { text: "\u274c Cancel", callback_data: `padel:${taskId}|cancel_booking` },
+      ],
+    ];
+    if (info.recording_url) {
+      rows.unshift([{ text: "\ud83c\udfa7 Listen to call", callback_data: `padel:${taskId}|noop` }]);
+    }
+
+    await respond.editMessage({ text, buttons: rows });
     return { handled: true };
   }
 
