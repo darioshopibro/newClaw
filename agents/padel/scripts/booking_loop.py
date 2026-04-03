@@ -81,11 +81,16 @@ def send_message(chat_id: str, text: str, keyboard: dict = None) -> int:
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     payload = {"chat_id": chat_id, "text": text, "parse_mode": "HTML"}
     if keyboard:
-        payload["reply_markup"] = keyboard
+        payload["reply_markup"] = json.dumps(keyboard) if isinstance(keyboard, dict) else keyboard
     try:
         resp = requests.post(url, json=payload, timeout=10)
-        if resp.status_code == 200 and resp.json().get('ok'):
-            return resp.json()['result']['message_id']
+        data = resp.json()
+        if resp.status_code == 200 and data.get('ok'):
+            msg_id = data['result']['message_id']
+            log(f"Sent msg={msg_id} to chat={chat_id}")
+            return msg_id
+        else:
+            log(f"Send failed {resp.status_code}: {resp.text[:200]}")
     except Exception as e:
         log(f"Send error: {e}")
     return 0
@@ -102,12 +107,13 @@ def edit_message(chat_id: str, message_id: int, text: str, keyboard: dict = None
         "parse_mode": "HTML",
     }
     if keyboard:
-        payload["reply_markup"] = keyboard
+        payload["reply_markup"] = json.dumps(keyboard) if isinstance(keyboard, dict) else keyboard
     try:
         resp = requests.post(url, json=payload, timeout=10)
         if resp.status_code != 200:
-            # Telegram returns error if message text unchanged - ignore
-            pass
+            log(f"Edit failed {resp.status_code}: {resp.text[:200]}")
+        else:
+            log(f"Edit OK msg={message_id}")
     except Exception as e:
         log(f"Edit error: {e}")
 
@@ -340,6 +346,7 @@ def run_booking_loop(task_id: str):
         return
 
     log(f"Starting booking loop: {len(venues)} venues for {booking_data.get('city', '')}")
+    log(f"BOT_TOKEN set: {bool(BOT_TOKEN)}, chat_id: {chat_id}")
 
     # Initialize clubs tracking dict
     clubs = {}
