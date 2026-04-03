@@ -43,7 +43,7 @@ if not BOT_TOKEN:
         pass
 
 # Polling config
-POLL_INTERVAL = 20  # seconds between VAPI status checks
+POLL_INTERVAL = 5  # seconds between Retell status checks
 MAX_CALL_WAIT = 360  # 6 minutes max per venue call
 MAX_TOTAL_TIME = 1800  # 30 minutes max for entire loop
 
@@ -452,11 +452,11 @@ def run_booking_loop(task_id: str):
             time.sleep(POLL_INTERVAL)
 
             status_result = check_vapi_status(call_id)
+            call_status = status_result.get("status", "unknown")
+            log(f"Poll {venue_name}: {call_status}")
 
             if not status_result.get("success"):
                 continue
-
-            call_status = status_result.get("status", "")
 
             if call_status in ("ended", "error"):
                 # Call ended - process result
