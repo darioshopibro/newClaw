@@ -160,11 +160,10 @@ export async function handlePadelCallback(
   }
 
   if (action === "pick_time") {
-    // User picked a time slot → create calendar event
+    // User picked a time slot → call venue AGAIN to confirm this specific time
     const timeIdx = parseInt(value, 10);
     const clubs: Record<string, any> = state.clubs || {};
 
-    // Use saved venue from pick_venue step
     const selectedVenue = state.selected_venue_for_time || "";
     const venueClub = clubs[selectedVenue] || {};
     const times: string[] = venueClub.times_available || [];
@@ -175,45 +174,43 @@ export async function handlePadelCallback(
       return { handled: true };
     }
 
-    await respond.editMessage({
-      text: `\u23f3 <b>Creating event...</b>\n\n\ud83c\udfbe ${selectedVenue}\n\ud83d\udcc6 ${state.booking_data?.date || ""} at ${selectedTime}`,
-      buttons: [],
-    });
+    // Find venue phone from venues list
+    const venueData = (state.venues || []).find((v: any) => v.name === selectedVenue);
+    const venuePhone = venueData?.phone || venueClub.phone || "";
+    const bd = state.booking_data || {};
 
-    // Create calendar event
+    // Update booking_data with selected time
+    bd.time = selectedTime;
+    state.booking_data = bd;
+
+    // Reset this venue status to pending for re-call
+    clubs[selectedVenue].status = "pending";
+    state.clubs = clubs;
+    state.venues = venueData ? [venueData] : [];  // Only call this venue
+
     try {
-      const cmd = `python3 ${SCRIPTS_DIR}/create_booking_event.py \
-        --title ${JSON.stringify(`Padel at ${selectedVenue}`)} \
-        --date ${JSON.stringify(state.booking_data?.date || "")} \
-        --time ${JSON.stringify(selectedTime)} \
-        --duration ${JSON.stringify(String(state.booking_data?.duration_minutes || 90))} \
-        --venue ${JSON.stringify(selectedVenue)} \
-        --city ${JSON.stringify(state.booking_data?.city || "")}`;
+      const { writeFileSync } = require("node:fs");
+      writeFileSync(`${STATE_DIR}/${taskId}.json`, JSON.stringify(state, null, 2));
+    } catch {}
 
-      const result = execSync(cmd, { timeout: 15_000, encoding: "utf-8" });
-      const parsed = JSON.parse(result.trim());
+    // Show progress message
+    editHTML(chatId, progressMsgId,
+      `\ud83d\udcde <b>Calling ${selectedVenue} to book ${selectedTime}...</b>`,
+      [[{ text: "\u274c Cancel", callback_data: `padel:${taskId}|cancel_booking` }]]);
 
-      if (parsed.success) {
-        let text = `\u2705 <b>Booking Confirmed!</b>\n\n`;
-        text += `\ud83c\udfbe ${selectedVenue}\n`;
-        text += `\ud83d\udcc6 ${state.booking_data?.date || ""} at ${selectedTime}\n`;
-        text += `\ud83c\udf0d ${state.booking_data?.city || ""}\n`;
-        if (parsed.link) {
-          text += `\n\ud83d\udd17 <a href="${parsed.link}">Open in Calendar</a>`;
-        }
-        await respond.editMessage({ text, buttons: [] });
-      } else {
-        await respond.editMessage({
-          text: `\u274c Failed to create event: ${parsed.error || "Unknown"}`,
-          buttons: [],
-        });
-      }
-    } catch (err: any) {
-      await respond.editMessage({
-        text: `\u274c Error: ${err.message?.slice(0, 200)}`,
-        buttons: [],
+    // Kill old loop and start new booking loop for just this venue+time
+    try { execSync(`pkill -f "booking_loop.py --task_id ${taskId}" 2>/dev/null || true`); } catch {}
+
+    try {
+      const { openSync } = require("node:fs");
+      const logFile = "/var/log/openclaw_padel.log";
+      const out = openSync(logFile, "a");
+      const child = spawn("python3", ["-u", `${SCRIPTS_DIR}/booking_loop.py`, "--task_id", taskId], {
+        detached: true,
+        stdio: ["ignore", out, out],
       });
-    }
+      child.unref();
+    } catch {}
 
     return { handled: true };
   }
