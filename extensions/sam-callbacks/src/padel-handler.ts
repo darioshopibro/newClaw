@@ -13,6 +13,21 @@ interface Respond {
 const SCRIPTS_DIR = "/root/.openclaw/workspace/agents/padel/scripts";
 const STATE_DIR = "/root/.openclaw/padel_state";
 
+/**
+ * Edit Telegram message with HTML parse_mode via Python helper.
+ * Plugin's respond.editMessage doesn't support HTML.
+ */
+function editHTML(chatId: string, messageId: string, text: string, buttons: Buttons) {
+  try {
+    const buttonsJson = JSON.stringify(buttons);
+    execSync(`python3 ${SCRIPTS_DIR}/edit_message.py \
+      --chat_id ${JSON.stringify(chatId)} \
+      --message_id ${JSON.stringify(messageId)} \
+      --text ${JSON.stringify(text)} \
+      --buttons ${JSON.stringify(buttonsJson)}`, { timeout: 10_000, encoding: "utf-8" });
+  } catch {}
+}
+
 function readState(taskId: string): Record<string, any> | null {
   try {
     const stateFile = `${STATE_DIR}/${taskId}.json`;
@@ -47,6 +62,8 @@ export async function handlePadelCallback(
 
   const chatId = String(state.chat_id || "");
   const messageId = String(state.message_id || "");
+  // For booking-related actions, use progress_message_id (the booking loop's message)
+  const progressMsgId = String(state.progress_message_id || messageId);
 
   // ── Booking loop actions (handled directly) ──
 
@@ -123,7 +140,7 @@ export async function handlePadelCallback(
       { text: "\u274c Cancel", callback_data: `padel:${taskId}|cancel_booking` },
     ]);
 
-    await respond.editMessage({ text, buttons: rows });
+    editHTML(chatId, progressMsgId, text, rows);
     return { handled: true };
   }
 
@@ -286,7 +303,7 @@ export async function handlePadelCallback(
     // 3. Cancel
     rows.push([{ text: "\u274c Cancel Booking", callback_data: `padel:${taskId}|cancel_booking` }]);
 
-    await respond.editMessage({ text, buttons: rows });
+    editHTML(chatId, progressMsgId, text, rows);
     return { handled: true };
   }
 
@@ -375,7 +392,7 @@ export async function handlePadelCallback(
       { text: "\u274c Cancel", callback_data: `padel:${taskId}|cancel_booking` },
     ]);
 
-    await respond.editMessage({ text, buttons: rows });
+    editHTML(chatId, progressMsgId, text, rows);
     return { handled: true };
   }
 
@@ -400,7 +417,7 @@ export async function handlePadelCallback(
       rows.unshift([{ text: "\ud83c\udfa7 Listen to call", callback_data: `padel:${taskId}|noop` }]);
     }
 
-    await respond.editMessage({ text, buttons: rows });
+    editHTML(chatId, progressMsgId, text, rows);
     return { handled: true };
   }
 
