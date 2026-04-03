@@ -278,10 +278,7 @@ export async function handlePadelCallback(
   }
 
   if (action === "cancel_booking") {
-    await respond.editMessage({
-      text: "\u274c <b>Booking Cancelled</b>",
-      buttons: [],
-    });
+    await respond.editMessage({ text: "\u274c Booking Cancelled", buttons: [] });
     return { handled: true };
   }
 

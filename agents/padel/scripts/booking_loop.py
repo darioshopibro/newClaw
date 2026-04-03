@@ -358,6 +358,13 @@ def run_booking_loop(task_id: str):
             "call_id": "",
         }
 
+    # Reorder venues: selected venue first, then the rest in original order
+    selected_venue_name = booking_data.get("venue_name", "")
+    if selected_venue_name:
+        selected = [v for v in venues if v.get("name", "") == selected_venue_name]
+        rest = [v for v in venues if v.get("name", "") != selected_venue_name]
+        venues = selected + rest
+
     # Build all_venues list for StatusRenderer format
     all_venues = [{"name": v.get("name", "Unknown"), "method": "call"} for v in venues]
 
