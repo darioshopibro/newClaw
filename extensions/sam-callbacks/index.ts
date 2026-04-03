@@ -2,7 +2,7 @@ import { definePluginEntry } from "openclaw/plugin-sdk/plugin-entry";
 import { handleQuizCallback } from "./src/quiz-handler.js";
 import { handleContactCallback } from "./src/contact-handler.js";
 import { handlePadelCallback } from "./src/padel-handler.js";
-import { handleAskFelixWebhook, handleVpCallback } from "./src/askfelix-handler.js";
+import { handleVpCallback } from "./src/askfelix-handler.js";
 
 export default definePluginEntry({
   id: "sam-callbacks",
@@ -44,12 +44,5 @@ export default definePluginEntry({
       },
     });
 
-    // ── HTTP route: askFelix webhook (Retell calls this mid-call) ──
-
-    api.registerHttpRoute({
-      path: "/webhook/ask-felix",
-      handler: handleAskFelixWebhook,
-      auth: "plugin",  // No gateway auth needed - Retell calls this
-    });
   },
 });
