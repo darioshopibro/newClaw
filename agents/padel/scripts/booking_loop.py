@@ -311,12 +311,28 @@ def run_booking_loop(task_id: str):
         log(f"No state found for {task_id}")
         return
 
+    # Build booking_data from quiz state (plugin calls us directly, padel_quiz.py proceed may not have run)
     booking_data = state.get("booking_data", {})
     if not booking_data:
-        log(f"No booking data in state for {task_id}")
-        return
+        settings = state.get("settings", {})
+        venue = state.get("selected_venue", {})
+        duration_map = {"1hr": 60, "1.5hr": 90, "2hr": 120}
+        booking_data = {
+            "task_id": task_id,
+            "chat_id": state.get("chat_id", ""),
+            "date": state.get("date", ""),
+            "time": state.get("time", ""),
+            "city": state.get("city_name", ""),
+            "city_key": state.get("city_key", ""),
+            "venue_name": venue.get("name", ""),
+            "venue_phone": venue.get("phone", ""),
+            "duration": settings.get("duration", "1.5hr"),
+            "duration_minutes": duration_map.get(settings.get("duration", "1.5hr"), 90),
+        }
+        state["booking_data"] = booking_data
+        save_state(task_id, state)
 
-    chat_id = booking_data.get("chat_id", "")
+    chat_id = booking_data.get("chat_id", "") or state.get("chat_id", "")
     venues = state.get("venues", [])
 
     if not venues:
