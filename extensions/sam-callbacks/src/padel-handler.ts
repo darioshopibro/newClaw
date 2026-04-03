@@ -51,18 +51,17 @@ export async function handlePadelCallback(
   // ── Booking loop actions (handled directly) ──
 
   if (action === "proceed") {
-    // Launch booking loop in background
+    // Kill any existing booking_loop for this task
     try {
-      const child = spawn("python3", [
-        `${SCRIPTS_DIR}/booking_loop.py`,
-        "--task_id", taskId,
-      ], {
-        detached: true,
-        stdio: "ignore",
-      });
-      child.unref();
+      execSync(`pkill -f "booking_loop.py --task_id ${taskId}" 2>/dev/null || true`, { encoding: "utf-8" });
+    } catch {}
 
-      // Quiz message will be replaced by booking_loop.py's progress message
+    // Launch booking loop in background with nohup
+    try {
+      const logFile = "/var/log/openclaw_padel.log";
+      const cmd = `nohup python3 -u ${SCRIPTS_DIR}/booking_loop.py --task_id ${taskId} >> ${logFile} 2>&1 &`;
+      execSync(cmd, { encoding: "utf-8" });
+
       return { handled: true };
     } catch (err: any) {
       await respond.editMessage({
@@ -278,6 +277,14 @@ export async function handlePadelCallback(
   }
 
   if (action === "cancel_booking") {
+    // Mark state as cancelled so booking_loop.py stops
+    try {
+      const stateFile = `${STATE_DIR}/${taskId}.json`;
+      const raw = execSync(`cat ${stateFile}`, { encoding: "utf-8" });
+      const st = JSON.parse(raw);
+      st.loop_status = "cancelled";
+      execSync(`echo ${JSON.stringify(JSON.stringify(st))} > ${stateFile}`);
+    } catch {}
     await respond.editMessage({ text: "\u274c Booking Cancelled", buttons: [] });
     return { handled: true };
   }
