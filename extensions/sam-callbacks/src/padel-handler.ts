@@ -19,12 +19,15 @@ const STATE_DIR = "/root/.openclaw/padel_state";
  */
 function editHTML(chatId: string, messageId: string, text: string, buttons: Buttons) {
   try {
-    const buttonsJson = JSON.stringify(buttons);
-    execSync(`python3 ${SCRIPTS_DIR}/edit_message.py \
-      --chat_id ${JSON.stringify(chatId)} \
-      --message_id ${JSON.stringify(messageId)} \
-      --text ${JSON.stringify(text)} \
-      --buttons ${JSON.stringify(buttonsJson)}`, { timeout: 10_000, encoding: "utf-8" });
+    const { writeFileSync, unlinkSync } = require("node:fs");
+    const tmpFile = `/tmp/padel_edit_${Date.now()}.json`;
+    const payload = JSON.stringify({ chat_id: chatId, message_id: messageId, text, buttons });
+    writeFileSync(tmpFile, payload);
+    execSync(`python3 ${SCRIPTS_DIR}/edit_message.py < ${tmpFile}`, {
+      timeout: 10_000,
+      encoding: "utf-8",
+    });
+    try { unlinkSync(tmpFile); } catch {}
   } catch {}
 }
 

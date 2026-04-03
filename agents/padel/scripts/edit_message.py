@@ -26,20 +26,29 @@ if not BOT_TOKEN:
 
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--chat_id", required=True)
-    parser.add_argument("--message_id", required=True)
-    parser.add_argument("--text", required=True)
-    parser.add_argument("--buttons", default="[]", help="JSON array of button rows")
-    args = parser.parse_args()
+    # Read JSON payload from stdin for reliable text transfer (no shell escaping issues)
+    if not sys.stdin.isatty():
+        data = json.loads(sys.stdin.read())
+    else:
+        parser = argparse.ArgumentParser()
+        parser.add_argument("--chat_id", required=True)
+        parser.add_argument("--message_id", required=True)
+        parser.add_argument("--text", required=True)
+        parser.add_argument("--buttons", default="[]")
+        args = parser.parse_args()
+        data = {
+            "chat_id": args.chat_id,
+            "message_id": args.message_id,
+            "text": args.text,
+            "buttons": json.loads(args.buttons),
+        }
 
-    buttons = json.loads(args.buttons)
     payload = {
-        "chat_id": args.chat_id,
-        "message_id": int(args.message_id),
-        "text": args.text,
+        "chat_id": data["chat_id"],
+        "message_id": int(data["message_id"]),
+        "text": data["text"],
         "parse_mode": "HTML",
-        "reply_markup": {"inline_keyboard": buttons},
+        "reply_markup": {"inline_keyboard": data.get("buttons", [])},
     }
 
     resp = requests.post(
