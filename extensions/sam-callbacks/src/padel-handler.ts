@@ -135,13 +135,25 @@ export async function handlePadelCallback(
 
     // Recording link if available
     if (venueInfo.recording_url) {
-      rows.push([{ text: "\ud83c\udfa7 Listen to call", url: info.recording_url }]);
+      rows.push([{ text: "\ud83c\udfa7 Listen to call", url: venueInfo.recording_url }]);
+    }
+
+    // View transcript if available
+    if (venueInfo.transcript_lines?.length) {
+      rows.push([{ text: "\ud83d\udcdd View Transcript", callback_data: `padel:${taskId}|view_summary|${venueName}` }]);
     }
 
     rows.push([
       { text: "\u2b05\ufe0f Back", callback_data: `padel:${taskId}|back_to_alternatives` },
       { text: "\u274c Cancel", callback_data: `padel:${taskId}|cancel_booking` },
     ]);
+
+    // Save selected venue name for pick_time to use
+    state.selected_venue_for_time = venueName;
+    try {
+      const { writeFileSync } = require("node:fs");
+      writeFileSync(`${STATE_DIR}/${taskId}.json`, JSON.stringify(state, null, 2));
+    } catch {}
 
     editHTML(chatId, progressMsgId, text, rows);
     return { handled: true };
@@ -152,18 +164,11 @@ export async function handlePadelCallback(
     const timeIdx = parseInt(value, 10);
     const clubs: Record<string, any> = state.clubs || {};
 
-    // Find venue with times (the one user was viewing)
-    let selectedVenue = "";
-    let selectedTime = "";
-
-    for (const [name, info] of Object.entries(clubs)) {
-      const times = (info as any).times_available || [];
-      if (timeIdx >= 0 && timeIdx < times.length) {
-        selectedVenue = name;
-        selectedTime = times[timeIdx];
-        break;
-      }
-    }
+    // Use saved venue from pick_venue step
+    const selectedVenue = state.selected_venue_for_time || "";
+    const venueClub = clubs[selectedVenue] || {};
+    const times: string[] = venueClub.times_available || [];
+    const selectedTime = (timeIdx >= 0 && timeIdx < times.length) ? times[timeIdx] : "";
 
     if (!selectedVenue || !selectedTime) {
       await respond.editMessage({ text: "\u26a0\ufe0f Invalid time selection.", buttons: [] });
