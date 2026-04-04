@@ -72,7 +72,6 @@ def create_wa_booking(
     progress_message_id: int = 0,
 ) -> dict:
     """Create a new WA booking entry."""
-    now = datetime.utcnow()
     data = {
         "task_id": task_id,
         "venue_name": venue_name,
@@ -83,14 +82,8 @@ def create_wa_booking(
         "chat_id": chat_id,
         "user_id": user_id,
         "status": "pending",
-        "delivery_status": None,
-        "conversation_history": json.dumps([]),
-        "wait_until": (now + timedelta(seconds=60)).isoformat(),
-        "booking_window_end": (now + timedelta(minutes=20)).isoformat(),
-        "progress_message_id": progress_message_id,
-        "total_extended_seconds": 0,
-        "is_active": True,
-        "created_at": now.isoformat(),
+        "delivery_status": "sending",
+        "conversation_history": [],
     }
 
     try:
@@ -223,10 +216,10 @@ def extend_wait(task_id: str, venue_name: str, extra_seconds: int = 30) -> dict:
 
 
 def get_active_bookings(task_id: str) -> list:
-    """Get all active WA bookings for a task."""
+    """Get all active WA bookings for a task (not rejected/confirmed)."""
     params = {
         "task_id": f"eq.{task_id}",
-        "is_active": "eq.true",
+        "status": "not.in.(rejected,confirmed,timeout)",
     }
     try:
         resp = requests.get(_url("whatsapp_bookings"), headers=HEADERS, params=params, timeout=10)
@@ -242,7 +235,7 @@ def find_booking_by_phone(venue_phone: str) -> dict:
     phone = venue_phone.strip().lstrip("+")
     params = {
         "venue_phone": f"like.*{phone}*",
-        "is_active": "eq.true",
+        "status": "not.in.(rejected,confirmed,timeout)",
         "order": "created_at.desc",
         "limit": "1",
     }
